@@ -1,0 +1,235 @@
+#!/bin/bash
+
+# CredAgent Uninstallation Script
+# Supports Linux (systemd) and macOS (launchd)
+
+set -e
+
+echo "CredAgent Uninstallation Script"
+echo "==============================="
+
+print_status() {
+    echo "[INFO] $1"
+}
+
+print_error() {
+    echo "[ERROR] $1" >&2
+}
+
+# Check if running as root
+if [ "$EUID" -ne 0 ]; then
+    print_error "This script must be run as root. Please use sudo."
+    exit 1
+fi
+
+OS="$(uname -s)"
+BINARY_PATHS=("/usr/local/bin/credagent" "/usr/local/bin/credctl" "/usr/local/bin/credreq")
+
+# ============================================================
+# Linux uninstallation
+# ============================================================
+uninstall_linux() {
+    # Stop and disable services
+    if systemctl is-active --quiet credagent 2>/dev/null; then
+        print_status "Stopping credagent service..."
+        systemctl stop credagent
+    fi
+
+    if systemctl is-enabled --quiet credagent 2>/dev/null; then
+        print_status "Disabling credagent service..."
+        systemctl disable credagent
+    fi
+
+    # Remove systemd service file
+    if [ -f "/etc/systemd/system/credagent.service" ]; then
+        print_status "Removing credagent systemd service file..."
+        rm -f /etc/systemd/system/credagent.service
+    fi
+
+    print_status "Reloading systemd daemon..."
+    systemctl daemon-reload
+
+    # Remove binaries
+    for binary_path in "${BINARY_PATHS[@]}"; do
+        if [ -f "$binary_path" ]; then
+            print_status "Removing $binary_path..."
+            rm -f "$binary_path"
+        fi
+    done
+
+    # Remove configuration directory
+    if [ -d "/usr/local/etc/credagent" ]; then
+        print_status "Removing configuration directory /usr/local/etc/credagent..."
+        rm -rf /usr/local/etc/credagent
+    fi
+
+    # Remove log directory
+    if [ -d "/var/log/credagent" ]; then
+        print_status "Removing log directory /var/log/credagent..."
+        rm -rf /var/log/credagent
+    fi
+
+    # Remove legacy credagent user/group
+    if id credagent > /dev/null 2>&1; then
+        print_status "Removing credagent user..."
+        userdel credagent 2>/dev/null || true
+    fi
+    if getent group credagent > /dev/null 2>&1; then
+        print_status "Removing credagent group..."
+        groupdel credagent 2>/dev/null || true
+    fi
+
+    # Check for remaining components
+    print_status "Checking for remaining CredAgent components..."
+
+    REMAINING_COMPONENTS=()
+
+    if [ -f "/etc/systemd/system/credagent.service" ]; then
+        REMAINING_COMPONENTS+=("/etc/systemd/system/credagent.service")
+    fi
+    for binary_path in "${BINARY_PATHS[@]}"; do
+        if [ -f "$binary_path" ]; then
+            REMAINING_COMPONENTS+=("$binary_path")
+        fi
+    done
+    if [ -d "/usr/local/etc/credagent" ]; then
+        REMAINING_COMPONENTS+=("/usr/local/etc/credagent/")
+    fi
+    if [ -d "/var/log/credagent" ]; then
+        REMAINING_COMPONENTS+=("/var/log/credagent/")
+    fi
+
+    if [ ${#REMAINING_COMPONENTS[@]} -eq 0 ]; then
+        echo ""
+        echo "Services have been stopped and disabled."
+        echo "Files removed:"
+        echo "- Binaries: /usr/local/bin/credagent, /usr/local/bin/credctl, /usr/local/bin/credreq"
+        echo "- Config: /usr/local/etc/credagent/"
+        echo "- Logs: /var/log/credagent/"
+        echo "- Services: /etc/systemd/system/credagent.service"
+        echo ""
+        print_status "Uninstallation completed successfully!"
+        echo ""
+        echo "All CredAgent components have been removed from your system."
+    else
+        print_error "Some CredAgent components could not be removed:"
+        for component in "${REMAINING_COMPONENTS[@]}"; do
+            print_error "  - $component"
+        done
+        echo ""
+        print_error "Manual cleanup may be required for these components."
+    fi
+}
+
+# ============================================================
+# macOS uninstallation
+# ============================================================
+uninstall_darwin() {
+    # Stop and unload launchd service
+    if launchctl list 2>/dev/null | grep -q "com.credagent.enclave"; then
+        print_status "Stopping credagent service..."
+        launchctl unload /Library/LaunchDaemons/com.credagent.enclave.plist 2>/dev/null || true
+    fi
+
+    # Remove launchd plist
+    if [ -f "/Library/LaunchDaemons/com.credagent.enclave.plist" ]; then
+        print_status "Removing launchd plist /Library/LaunchDaemons/com.credagent.enclave.plist..."
+        rm -f /Library/LaunchDaemons/com.credagent.enclave.plist
+    fi
+
+    # Remove binaries
+    for binary_path in "${BINARY_PATHS[@]}"; do
+        if [ -f "$binary_path" ]; then
+            print_status "Removing $binary_path..."
+            rm -f "$binary_path"
+        fi
+    done
+
+    # Remove configuration directory
+    if [ -d "/usr/local/etc/credagent" ]; then
+        print_status "Removing configuration directory /usr/local/etc/credagent..."
+        rm -rf /usr/local/etc/credagent
+    fi
+
+    # Remove log directory
+    if [ -d "/usr/local/var/log/credagent" ]; then
+        print_status "Removing log directory /usr/local/var/log/credagent..."
+        rm -rf /usr/local/var/log/credagent
+    fi
+
+    # Remove data directory
+    if [ -d "/usr/local/var/credagent" ]; then
+        print_status "Removing data directory /usr/local/var/credagent..."
+        rm -rf /usr/local/var/credagent
+    fi
+
+    # Remove socket directory
+    if [ -d "/var/run/credagent" ]; then
+        print_status "Removing socket directory /var/run/credagent..."
+        rm -rf /var/run/credagent
+    fi
+
+    # Check for remaining components
+    print_status "Checking for remaining CredAgent components..."
+
+    REMAINING_COMPONENTS=()
+
+    if [ -f "/Library/LaunchDaemons/com.credagent.enclave.plist" ]; then
+        REMAINING_COMPONENTS+=("/Library/LaunchDaemons/com.credagent.enclave.plist")
+    fi
+    for binary_path in "${BINARY_PATHS[@]}"; do
+        if [ -f "$binary_path" ]; then
+            REMAINING_COMPONENTS+=("$binary_path")
+        fi
+    done
+    if [ -d "/usr/local/etc/credagent" ]; then
+        REMAINING_COMPONENTS+=("/usr/local/etc/credagent/")
+    fi
+    if [ -d "/usr/local/var/log/credagent" ]; then
+        REMAINING_COMPONENTS+=("/usr/local/var/log/credagent/")
+    fi
+    if [ -d "/usr/local/var/credagent" ]; then
+        REMAINING_COMPONENTS+=("/usr/local/var/credagent/")
+    fi
+
+    if [ ${#REMAINING_COMPONENTS[@]} -eq 0 ]; then
+        echo ""
+        echo "Service has been stopped and unloaded."
+        echo "Files removed:"
+        echo "- Binaries: /usr/local/bin/credagent, /usr/local/bin/credctl, /usr/local/bin/credreq"
+        echo "- Config: /usr/local/etc/credagent/"
+        echo "- Logs: /usr/local/var/log/credagent/"
+        echo "- Data: /usr/local/var/credagent/"
+        echo "- Service: /Library/LaunchDaemons/com.credagent.enclave.plist"
+        echo ""
+        print_status "Uninstallation completed successfully!"
+        echo ""
+        echo "All CredAgent components have been removed from your system."
+    else
+        print_error "Some CredAgent components could not be removed:"
+        for component in "${REMAINING_COMPONENTS[@]}"; do
+            print_error "  - $component"
+        done
+        echo ""
+        print_error "Manual cleanup may be required for these components."
+    fi
+}
+
+# ============================================================
+# Main: dispatch by OS
+# ============================================================
+print_status "Detected operating system: $OS"
+
+case "$OS" in
+    Linux)
+        uninstall_linux
+        ;;
+    Darwin)
+        uninstall_darwin
+        ;;
+    *)
+        print_error "Unsupported operating system: $OS"
+        print_error "This script supports Linux and macOS only."
+        exit 1
+        ;;
+esac

@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.credagent.enclave</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/usr/local/bin/credagent</string>
+        <string>run</string>
+        <string>--mount</string>
+        <string>/usr/local/var/credagent/shielded/</string>
+        <string>--socket-dir</string>
+        <string>/var/run/credagent</string>
+        <string>--baseline-file</string>
+        <string>/usr/local/var/credagent/baseline.enc</string>
+        <string>--config</string>
+        <string>/usr/local/etc/credagent/engine/config.json</string>
+    </array>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+    <key>StandardOutPath</key>
+    <string>/usr/local/var/log/credagent/credagent.log</string>
+    <key>StandardErrorPath</key>
+    <string>/usr/local/var/log/credagent/credagent.err</string>
+</dict>
+</plist>
