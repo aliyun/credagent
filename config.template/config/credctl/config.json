@@ -1,0 +1,9 @@
+{
+  "enclave": {
+    "socket_dir": "/run/credagent"
+  },
+  "monitor": {
+    "mount_point": "/mnt/credagent/shielded"
+  },
+  "log_level": "info"
+}

@@ -1,0 +1,17 @@
+{
+  "enclave": {
+    "socket_dir": "/run/credagent",
+    "master_key_file": "/usr/local/etc/credagent/engine/master.key",
+    "baseline_file": "/var/lib/credagent/baseline.enc"
+  },
+  "monitor": {
+    "mount_point": "/mnt/credagent/shielded"
+  },
+  "credagent": {
+    "api_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+    "api_key": "YOUR_API_KEY_HERE",
+    "model_name": "qwen-turbo",
+    "timeout_seconds": 30
+  },
+  "log_level": "info"
+}

@@ -1,0 +1,18 @@
+/.vscode
+/.claude
+/.clinerules
+/credagent
+/credctl
+/credmon
+/credreq
+
+# CLAUDE.md (AI assistant config) — never track on any branch
+**/CLAUDE.md
+
+# skill files (deprecated)
+cmd/credreq/skill*.md
+
+# Docs/ — only manual.md is tracked
+/Docs/*
+!/Docs/manual.md
+PROJECT_SUMMARY.md

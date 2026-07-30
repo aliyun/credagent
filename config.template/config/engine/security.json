@@ -1,0 +1,41 @@
+{
+  "cmdline_trusted_source": ["ebpf"],
+  "antiattack_options": {
+    "trusted_harness": [],
+    "binary_check": {
+      "enabled": false,
+      "trusted_programs": []
+    },
+    "ancestor_check": {
+      "enabled": false,
+      "max_depth": 5
+    },
+    "process_status_check": {
+      "enabled": false
+    },
+    "library_injection_check": {
+      "enabled": false,
+      "trusted_lib_paths": []
+    },
+    "env_var_check": {
+      "enabled": false,
+      "trusted_env": {}
+    },
+    "interpreter_check": {
+      "python": {
+        "enabled": false,
+        "trusted_env": {},
+        "trusted_scripts": [],
+        "exe_paths": []
+      },
+      "node": { "enabled": false, "trusted_env": {}, "trusted_scripts": [], "exe_paths": [] },
+      "perl": { "enabled": false, "trusted_env": {}, "trusted_scripts": [], "exe_paths": [] },
+      "ruby": { "enabled": false, "trusted_env": {}, "trusted_scripts": [], "exe_paths": [] },
+      "java": { "enabled": false, "trusted_env": {}, "exe_paths": [] },
+      "php": { "enabled": false, "trusted_env": {}, "trusted_scripts": [], "exe_paths": [] }
+    },
+    "fd_share_check": {
+      "enabled": false
+    }
+  }
+}

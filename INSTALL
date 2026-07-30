@@ -1,0 +1,801 @@
+#!/bin/bash
+
+# CredAgent Installation Script
+# Supports Linux (systemd) and macOS (launchd)
+
+set -e
+
+# ============================================================
+# UI helpers
+# ============================================================
+GREEN='\033[0;32m'
+RED='\033[0;31m'
+YELLOW='\033[0;33m'
+BOLD='\033[1m'
+NC='\033[0m'
+
+print_ok() {
+    echo -e " ${GREEN}✔${NC} $1"
+}
+
+print_fail() {
+    echo -e " ${RED}✘${NC} $1"
+}
+
+print_warn() {
+    echo -e " ${YELLOW}!${NC} $1"
+}
+
+print_error() {
+    echo -e "${RED}[ERROR]${NC} $1" >&2
+}
+
+print_step() {
+    echo -e "\n${BOLD}>> $1${NC}"
+}
+
+# ============================================================
+# Service stop with timeout and force kill
+# ============================================================
+STOP_TIMEOUT=15
+
+stop_systemd_service() {
+    local svc="$1"
+    if ! systemctl is-active --quiet "$svc" 2>/dev/null; then
+        return 0
+    fi
+    systemctl stop "$svc" &
+    local pid=$!
+    local waited=0
+    while kill -0 "$pid" 2>/dev/null; do
+        sleep 1
+        waited=$((waited + 1))
+        if [ "$waited" -ge "$STOP_TIMEOUT" ]; then
+            kill "$pid" 2>/dev/null || true
+            print_warn "systemctl stop $svc timed out after ${STOP_TIMEOUT}s, force killing..."
+            local main_pid
+            main_pid=$(systemctl show -p MainPID --value "$svc" 2>/dev/null)
+            if [ -n "$main_pid" ] && [ "$main_pid" != "0" ]; then
+                kill -9 "$main_pid" 2>/dev/null || true
+            fi
+            systemctl reset-failed "$svc" 2>/dev/null || true
+            return 0
+        fi
+    done
+    wait "$pid" 2>/dev/null || true
+}
+
+stop_launchd_service() {
+    local label="$1"
+    local plist="$2"
+    if ! launchctl list 2>/dev/null | grep -q "$label"; then
+        return 0
+    fi
+    launchctl unload "$plist" 2>/dev/null &
+    local pid=$!
+    local waited=0
+    while kill -0 "$pid" 2>/dev/null; do
+        sleep 1
+        waited=$((waited + 1))
+        if [ "$waited" -ge "$STOP_TIMEOUT" ]; then
+            kill "$pid" 2>/dev/null || true
+            print_warn "launchctl unload $label timed out after ${STOP_TIMEOUT}s, force killing..."
+            local svc_pid
+            svc_pid=$(launchctl list | grep "$label" | awk '{print $1}')
+            if [ -n "$svc_pid" ] && [ "$svc_pid" != "-" ]; then
+                kill -9 "$svc_pid" 2>/dev/null || true
+            fi
+            launchctl remove "$label" 2>/dev/null || true
+            return 0
+        fi
+    done
+    wait "$pid" 2>/dev/null || true
+}
+
+# ============================================================
+# Backup & Rollback
+# ============================================================
+BACKUP_FILE=""
+
+get_backup_dir() {
+    case "$(uname -s)" in
+        Linux)  echo "/var/lib/credagent/backups" ;;
+        Darwin) echo "/usr/local/var/credagent/backups" ;;
+    esac
+}
+
+get_backup_files_linux() {
+    local files=(
+        /usr/local/bin/credagent
+        /usr/local/bin/credctl
+        /usr/local/bin/credreq
+        /usr/local/etc/credagent/engine/config.json
+        /usr/local/etc/credagent/engine/security.json
+        /usr/local/etc/credagent/engine/master.key
+        /usr/local/etc/credagent/engine/admin_password.json
+        /usr/local/etc/credagent/credctl/config.json
+        /var/lib/credagent/baseline.enc
+        /etc/systemd/system/credagent.service
+    )
+    local existing=()
+    for f in "${files[@]}"; do
+        [ -f "$f" ] && existing+=("$f")
+    done
+    echo "${existing[@]}"
+}
+
+get_backup_files_darwin() {
+    local files=(
+        /usr/local/bin/credagent
+        /usr/local/bin/credctl
+        /usr/local/bin/credreq
+        /usr/local/etc/credagent/engine/config.json
+        /usr/local/etc/credagent/engine/security.json
+        /usr/local/etc/credagent/engine/master.key
+        /usr/local/etc/credagent/engine/admin_password.json
+        /usr/local/etc/credagent/credctl/config.json
+        /usr/local/var/credagent/baseline.enc
+        /Library/LaunchDaemons/com.credagent.enclave.plist
+    )
+    local existing=()
+    for f in "${files[@]}"; do
+        [ -f "$f" ] && existing+=("$f")
+    done
+    echo "${existing[@]}"
+}
+
+create_backup() {
+    local backup_dir
+    backup_dir="$(get_backup_dir)"
+    mkdir -p "$backup_dir"
+
+    local timestamp
+    timestamp="$(date '+%Y%m%d-%H%M%S')"
+    BACKUP_FILE="$backup_dir/credagent-backup-${timestamp}.tar.gz"
+
+    local files
+    case "$(uname -s)" in
+        Linux)  files=$(get_backup_files_linux) ;;
+        Darwin) files=$(get_backup_files_darwin) ;;
+    esac
+
+    if [ -z "$files" ]; then
+        print_warn "No existing files to backup"
+        BACKUP_FILE=""
+        return 0
+    fi
+
+    # shellcheck disable=SC2086
+    tar czf "$BACKUP_FILE" --ignore-failed-read $files 2>/dev/null
+    echo "$BACKUP_FILE" > "$backup_dir/latest"
+
+    local size
+    size=$(du -h "$BACKUP_FILE" | cut -f1)
+    print_ok "Backup created: $BACKUP_FILE ($size)"
+
+    # Rotate: keep only the last 5 backups
+    local keep=5
+    local count
+    count=$(ls -1t "$backup_dir"/credagent-backup-*.tar.gz 2>/dev/null | wc -l)
+    if [ "$count" -gt "$keep" ]; then
+        ls -1t "$backup_dir"/credagent-backup-*.tar.gz | tail -n +$((keep + 1)) | while read -r old; do
+            rm -f "$old"
+            print_warn "Removed old backup: $(basename "$old")"
+        done
+    fi
+}
+
+do_rollback() {
+    if [ "$EUID" -ne 0 ]; then
+        print_error "This script must be run as root. Please use sudo."
+        exit 1
+    fi
+
+    local os
+    os="$(uname -s)"
+    local backup_dir
+    backup_dir="$(get_backup_dir)"
+
+    local backup_file=""
+
+    # If a specific backup file is provided as second argument
+    if [ -n "${2:-}" ] && [ -f "${2:-}" ]; then
+        backup_file="$2"
+    elif [ -f "$backup_dir/latest" ]; then
+        backup_file="$(cat "$backup_dir/latest")"
+    fi
+
+    if [ -z "$backup_file" ] || [ ! -f "$backup_file" ]; then
+        print_error "No backup found."
+        if [ -d "$backup_dir" ]; then
+            local backups
+            backups=$(ls -1t "$backup_dir"/credagent-backup-*.tar.gz 2>/dev/null || true)
+            if [ -n "$backups" ]; then
+                echo ""
+                echo "Available backups:"
+                echo "$backups"
+                echo ""
+                echo "Usage: sudo ./INSTALL --rollback [backup_file]"
+            else
+                echo "No backup files found in $backup_dir"
+            fi
+        fi
+        exit 1
+    fi
+
+    echo ""
+    echo -e "${BOLD}CredAgent Rollback${NC}"
+    echo "==============================="
+    echo ""
+    echo -e "  Backup file: ${BOLD}$backup_file${NC}"
+    echo ""
+
+    # Verify backup integrity before proceeding
+    print_step "Verifying backup integrity"
+    if ! tar tzf "$backup_file" >/dev/null 2>&1; then
+        print_fail "Backup file is corrupted: $backup_file"
+        print_error "Cannot proceed with rollback. Try a different backup file."
+        exit 1
+    fi
+    local file_count
+    file_count=$(tar tzf "$backup_file" | wc -l)
+    print_ok "Backup integrity verified ($file_count files)"
+
+    echo ""
+    echo "Files to be restored:"
+    tar tzf "$backup_file" | while read -r f; do
+        echo "  /$f"
+    done
+    echo ""
+
+    # Confirmation prompt
+    echo -e "${YELLOW}WARNING: This will replace current files with the backup version!${NC}"
+    echo -n -e "Are you sure you want to rollback? [y/N] "
+    local confirm
+    read -r confirm
+    if [ "$confirm" != "y" ] && [ "$confirm" != "Y" ]; then
+        echo "Rollback cancelled."
+        exit 0
+    fi
+
+    print_step "Stopping service"
+    case "$os" in
+        Linux)
+            stop_systemd_service credagent
+            print_ok "credagent service stopped"
+            ;;
+        Darwin)
+            stop_launchd_service "com.credagent.enclave" "/Library/LaunchDaemons/com.credagent.enclave.plist"
+            print_ok "credagent service stopped"
+            ;;
+    esac
+
+    print_step "Restoring files from backup"
+    # Use -p (--preserve-permissions) to restore file ownership and permissions
+    # (e.g. master.key must be 0600, binaries must be 0755)
+    tar xzpf "$backup_file" -C /
+    print_ok "Files restored from $backup_file"
+
+    print_step "Restarting service"
+    case "$os" in
+        Linux)
+            systemctl daemon-reload
+            systemctl start credagent 2>/dev/null || true
+            sleep 2
+            if systemctl is-active --quiet credagent; then
+                print_ok "credagent service started successfully"
+            else
+                print_fail "credagent service failed to start"
+                print_error "Check logs: sudo journalctl -u credagent -e"
+            fi
+            ;;
+        Darwin)
+            launchctl load /Library/LaunchDaemons/com.credagent.enclave.plist 2>/dev/null || true
+            sleep 2
+            if launchctl list 2>/dev/null | grep -q "com.credagent.enclave"; then
+                print_ok "credagent service started successfully"
+            else
+                print_fail "credagent service failed to start"
+                print_error "Check logs: tail -f /usr/local/var/log/credagent/credagent.log"
+            fi
+            ;;
+    esac
+
+    echo ""
+    echo -e "${BOLD}===============================${NC}"
+    echo -e "${GREEN}${BOLD}  Rollback completed!${NC}"
+    echo -e "${BOLD}===============================${NC}"
+    echo ""
+}
+
+# ============================================================
+# Handle --rollback before anything else
+# ============================================================
+if [ "${1:-}" = "--rollback" ]; then
+    do_rollback "$@"
+    exit $?
+fi
+
+# ============================================================
+# Main
+# ============================================================
+echo ""
+echo -e "${BOLD}CredAgent Installation Script${NC}"
+echo "==============================="
+
+# Check if running as root
+if [ "$EUID" -ne 0 ]; then
+    print_error "This script must be run as root. Please use sudo."
+    exit 1
+fi
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+OS="$(uname -s)"
+BINARIES=("credagent" "credctl" "credreq")
+UPGRADE_MODE=false
+
+# ============================================================
+# Pre-flight checks
+# ============================================================
+print_step "Pre-flight checks"
+
+# Check binaries
+ALL_FOUND=true
+for binary in "${BINARIES[@]}"; do
+    if [ ! -f "$SCRIPT_DIR/$binary" ]; then
+        print_fail "Binary '$binary' not found in $SCRIPT_DIR"
+        ALL_FOUND=false
+    else
+        print_ok "Found $binary"
+    fi
+done
+if [ "$ALL_FOUND" != true ]; then
+    echo ""
+    print_error "Missing binaries. Please build first:"
+    echo "  go build -o credagent ./cmd/credagent"
+    echo "  go build -o credctl ./cmd/credctl"
+    echo "  go build -o credreq ./cmd/credreq"
+    exit 1
+fi
+
+# ============================================================
+# Linux installation
+# ============================================================
+install_linux() {
+    # Check platform-specific required files
+    local missing=false
+    # --- FUSE dependency check (non-blocking) ---
+    if ! command -v fusermount >/dev/null 2>&1; then
+        print_warn "fusermount not found — FUSE runtime is required for credagent to start"
+        echo "  Install on Debian/Ubuntu:  sudo apt install fuse libfuse-dev"
+        echo "  Install on RHEL/CentOS:   sudo yum install fuse fuse-devel"
+        echo "  Install on Alpine:        sudo apk add fuse fuse-dev"
+    else
+        print_ok "Found fusermount ($(fusermount -V 2>&1 | tail -1))"
+    fi
+
+    for f in "credagent.service" "config.template/config/engine/config.json" "config.template/config/engine/security.json" "config.template/config/credctl/config.json"; do
+        if [ ! -f "$SCRIPT_DIR/$f" ]; then
+            print_fail "Missing: $f"
+            missing=true
+        else
+            print_ok "Found $f"
+        fi
+    done
+    if [ "$missing" = true ]; then
+        print_error "Required files are missing. Cannot continue."
+        exit 1
+    fi
+
+    # --- Stop legacy credmon FIRST, then credagent ---
+    print_step "Checking existing services"
+
+    # Detect upgrade mode: service running, service enabled, or binary already installed
+    if systemctl is-active --quiet credmon 2>/dev/null; then
+        UPGRADE_MODE=true
+        print_warn "Detected running credmon service (legacy), stopping..."
+        stop_systemd_service credmon
+        print_ok "credmon service stopped"
+    fi
+
+    if systemctl is-active --quiet credagent 2>/dev/null; then
+        UPGRADE_MODE=true
+        print_warn "Detected running credagent service, stopping for upgrade..."
+        stop_systemd_service credagent
+        print_ok "credagent service stopped"
+    fi
+
+    # Also detect upgrade when service is stopped but still installed
+    if [ "$UPGRADE_MODE" = false ]; then
+        if systemctl is-enabled --quiet credagent 2>/dev/null || [ -f /usr/local/bin/credagent ]; then
+            UPGRADE_MODE=true
+            print_warn "Detected existing credagent installation (service not running)"
+        fi
+    fi
+
+    # Clean up legacy credmon artifacts
+    if systemctl is-enabled --quiet credmon 2>/dev/null; then
+        systemctl disable credmon 2>/dev/null || true
+        print_ok "Disabled legacy credmon service"
+    fi
+    if [ -f "/etc/systemd/system/credmon.service" ]; then
+        rm -f /etc/systemd/system/credmon.service
+        print_ok "Removed legacy credmon.service"
+    fi
+    if [ -f "/usr/local/bin/credmon" ]; then
+        rm -f /usr/local/bin/credmon
+        print_ok "Removed legacy credmon binary"
+    fi
+
+    if [ "$UPGRADE_MODE" = true ]; then
+        echo ""
+        echo -e "  ${BOLD}Mode: UPGRADE${NC}"
+
+        print_step "Creating backup"
+        create_backup
+    else
+        echo ""
+        echo -e "  ${BOLD}Mode: FRESH INSTALL${NC}"
+    fi
+
+    # Create directories
+    print_step "Creating directories"
+    mkdir -p /usr/local/bin
+    mkdir -p /usr/local/etc/credagent/engine
+    mkdir -p /usr/local/etc/credagent/credctl
+    mkdir -p /var/log/credagent
+    print_ok "Installation directories ready"
+
+    # Clean up legacy credagent user/group (2.0+ runs as root)
+    if [ "$UPGRADE_MODE" = true ]; then
+        print_step "Cleaning up legacy user/group"
+        if id credagent > /dev/null 2>&1; then
+            userdel credagent 2>/dev/null || true
+            print_ok "Removed legacy credagent user"
+        fi
+        if getent group credagent > /dev/null 2>&1; then
+            groupdel credagent 2>/dev/null || true
+            print_ok "Removed legacy credagent group"
+        fi
+    fi
+
+    # Install binaries
+    print_step "Installing binaries"
+    for binary in "${BINARIES[@]}"; do
+        rm -f /usr/local/bin/"$binary"
+        cp "$SCRIPT_DIR/$binary" /usr/local/bin/
+        chmod +x /usr/local/bin/"$binary"
+        print_ok "Installed $binary"
+    done
+    chown root:root /usr/local/bin/credagent
+    print_ok "Set credagent ownership to root:root (required for FUSE)"
+
+    # Install configuration files (skip if already exist)
+    print_step "Installing configuration"
+    if [ ! -f /usr/local/etc/credagent/engine/config.json ]; then
+        cp "$SCRIPT_DIR/config.template/config/engine/config.json" /usr/local/etc/credagent/engine/config.json
+        print_ok "Installed engine config"
+    else
+        print_warn "Skipped engine config (already exists)"
+    fi
+
+    if [ ! -f /usr/local/etc/credagent/engine/security.json ]; then
+        cp "$SCRIPT_DIR/config.template/config/engine/security.json" /usr/local/etc/credagent/engine/security.json
+        print_ok "Installed engine security config"
+    else
+        print_warn "Skipped engine security config (already exists)"
+    fi
+
+    if [ ! -f /usr/local/etc/credagent/credctl/config.json ]; then
+        cp "$SCRIPT_DIR/config.template/config/credctl/config.json" /usr/local/etc/credagent/credctl/config.json
+        print_ok "Installed credctl config"
+    else
+        print_warn "Skipped credctl config (already exists)"
+    fi
+
+    # Install systemd service file (always overwrite)
+    print_step "Installing systemd service"
+    cp "$SCRIPT_DIR/credagent.service" /etc/systemd/system/credagent.service
+    chmod 644 /etc/systemd/system/credagent.service
+    print_ok "Installed credagent.service"
+    systemctl daemon-reload
+    print_ok "Reloaded systemd daemon"
+
+    # --- Start / restart service ---
+    print_step "Starting service"
+    if [ "$UPGRADE_MODE" = true ]; then
+        systemctl start credagent
+        systemctl enable credagent 2>/dev/null
+        sleep 2
+        if systemctl is-active --quiet credagent; then
+            print_ok "credagent service restarted successfully"
+        else
+            print_fail "credagent service failed to start"
+            print_error "Check logs: sudo journalctl -u credagent -e"
+        fi
+        print_ok "Enabled credagent to start on boot"
+    else
+        # Fresh install: check if init has been done
+        if [ -f /usr/local/etc/credagent/engine/master.key ]; then
+            systemctl start credagent
+            sleep 2
+            if systemctl is-active --quiet credagent; then
+                print_ok "credagent service started successfully"
+            else
+                print_fail "credagent service failed to start"
+                print_error "Check logs: sudo journalctl -u credagent -e"
+            fi
+            systemctl enable credagent 2>/dev/null
+            print_ok "Enabled credagent to start on boot"
+        else
+            print_warn "System not yet initialized (master key not found)"
+            print_warn "Service NOT started — please run init first"
+        fi
+    fi
+
+    # --- Summary ---
+    echo ""
+    echo -e "${BOLD}===============================${NC}"
+    if [ "$UPGRADE_MODE" = true ]; then
+        echo -e "${GREEN}${BOLD}  Upgrade completed successfully!${NC}"
+        echo -e "${BOLD}===============================${NC}"
+        if [ -n "$BACKUP_FILE" ]; then
+            echo ""
+            echo -e "  Backup saved to: ${BOLD}$BACKUP_FILE${NC}"
+            echo ""
+            echo "  Please verify the upgrade. If anything is wrong, rollback with:"
+            echo "    sudo ./INSTALL --rollback"
+        fi
+        echo ""
+        echo "Useful commands:"
+        echo "  sudo systemctl status credagent"
+        echo "  sudo journalctl -u credagent -f"
+    else
+        echo -e "${GREEN}${BOLD}  Installation completed successfully!${NC}"
+        echo -e "${BOLD}===============================${NC}"
+        if [ ! -f /usr/local/etc/credagent/engine/master.key ]; then
+            echo ""
+            echo "Next steps:"
+            echo "1. Edit config files if needed:"
+            echo "   - /usr/local/etc/credagent/engine/config.json"
+            echo "   - /usr/local/etc/credagent/credctl/config.json"
+            echo ""
+            echo "2. Initialize the system (REQUIRED before first start):"
+            echo "   sudo credagent init --config /usr/local/etc/credagent/engine/config.json"
+            echo ""
+            echo "3. Start and enable the service:"
+            echo "   sudo systemctl start credagent"
+            echo "   sudo systemctl enable credagent"
+            echo ""
+            echo "Cloud image / unattended alternative (no interactive init):"
+            echo "   Add '--auto-init' to the systemd unit ExecStart (e.g. via a drop-in at"
+            echo "   /etc/systemd/system/credagent.service.d/auto-init.conf). On first start,"
+            echo "   credagent will generate a master key, back up any stale baseline.enc,"
+            echo "   and set an unrecoverable random admin password. Reset the password later"
+            echo "   with: sudo credagent init --config /usr/local/etc/credagent/engine/config.json"
+        fi
+        echo ""
+        echo "Useful commands:"
+        echo "  sudo systemctl status credagent"
+        echo "  sudo journalctl -u credagent -f"
+    fi
+}
+
+# ============================================================
+# macOS installation
+# ============================================================
+install_darwin() {
+    # Check platform-specific required files
+    local missing=false
+    # --- macFUSE dependency check (non-blocking) ---
+    if ! command -v mount_macfuse >/dev/null 2>&1 && ! kextstat 2>/dev/null | grep -q 'com.github.osxfuse'; then
+        print_warn "macFUSE not found — FUSE runtime is required for credagent to start"
+        echo "  Install:  brew install --cask macfuse"
+        echo "  Then restart your Mac to load the kernel extension"
+    else
+        print_ok "Found macFUSE"
+    fi
+
+    for f in "com.credagent.enclave.plist" "config.template/macos/engine/config.json" "config.template/macos/engine/security.json" "config.template/macos/credctl/config.json"; do
+        if [ ! -f "$SCRIPT_DIR/$f" ]; then
+            print_fail "Missing: $f"
+            missing=true
+        else
+            print_ok "Found $f"
+        fi
+    done
+    if [ "$missing" = true ]; then
+        print_error "Required files are missing. Cannot continue."
+        exit 1
+    fi
+
+    # --- Stop legacy credmon FIRST, then credagent ---
+    print_step "Checking existing services"
+
+    # Detect upgrade mode: service running, or binary already installed
+    if launchctl list 2>/dev/null | grep -q "com.credagent.monitor"; then
+        UPGRADE_MODE=true
+        print_warn "Detected running credmon service (legacy), stopping..."
+        stop_launchd_service "com.credagent.monitor" "/Library/LaunchDaemons/com.credagent.monitor.plist"
+        print_ok "credmon service stopped"
+    fi
+
+    if launchctl list 2>/dev/null | grep -q "com.credagent.enclave"; then
+        UPGRADE_MODE=true
+        print_warn "Detected running credagent service, stopping for upgrade..."
+        stop_launchd_service "com.credagent.enclave" "/Library/LaunchDaemons/com.credagent.enclave.plist"
+        print_ok "credagent service stopped"
+    fi
+
+    # Also detect upgrade when service is stopped but still installed
+    if [ "$UPGRADE_MODE" = false ]; then
+        if [ -f /usr/local/bin/credagent ] || [ -f /Library/LaunchDaemons/com.credagent.enclave.plist ]; then
+            UPGRADE_MODE=true
+            print_warn "Detected existing credagent installation (service not running)"
+        fi
+    fi
+
+    # Clean up legacy credmon artifacts
+    if [ -f "/Library/LaunchDaemons/com.credagent.monitor.plist" ]; then
+        rm -f /Library/LaunchDaemons/com.credagent.monitor.plist
+        print_ok "Removed legacy credmon plist"
+    fi
+    if [ -f "/usr/local/bin/credmon" ]; then
+        rm -f /usr/local/bin/credmon
+        print_ok "Removed legacy credmon binary"
+    fi
+
+    if [ "$UPGRADE_MODE" = true ]; then
+        echo ""
+        echo -e "  ${BOLD}Mode: UPGRADE${NC}"
+
+        print_step "Creating backup"
+        create_backup
+    else
+        echo ""
+        echo -e "  ${BOLD}Mode: FRESH INSTALL${NC}"
+    fi
+
+    # Create directories
+    print_step "Creating directories"
+    mkdir -p /usr/local/bin
+    mkdir -p /usr/local/etc/credagent/engine
+    mkdir -p /usr/local/etc/credagent/credctl
+    mkdir -p /usr/local/var/log/credagent
+    mkdir -p /usr/local/var/credagent
+    mkdir -p /var/run/credagent
+    mkdir -p /usr/local/var/credagent/shielded
+    print_ok "Installation directories ready"
+
+    # Install binaries
+    print_step "Installing binaries"
+    for binary in "${BINARIES[@]}"; do
+        rm -f /usr/local/bin/"$binary"
+        cp "$SCRIPT_DIR/$binary" /usr/local/bin/
+        chmod +x /usr/local/bin/"$binary"
+        print_ok "Installed $binary"
+    done
+
+    # Install configuration files (skip if already exist)
+    print_step "Installing configuration"
+    if [ ! -f /usr/local/etc/credagent/engine/config.json ]; then
+        cp "$SCRIPT_DIR/config.template/macos/engine/config.json" /usr/local/etc/credagent/engine/config.json
+        print_ok "Installed engine config"
+    else
+        print_warn "Skipped engine config (already exists)"
+    fi
+
+    if [ ! -f /usr/local/etc/credagent/engine/security.json ]; then
+        cp "$SCRIPT_DIR/config.template/macos/engine/security.json" /usr/local/etc/credagent/engine/security.json
+        print_ok "Installed engine security config"
+    else
+        print_warn "Skipped engine security config (already exists)"
+    fi
+
+    if [ ! -f /usr/local/etc/credagent/credctl/config.json ]; then
+        cp "$SCRIPT_DIR/config.template/macos/credctl/config.json" /usr/local/etc/credagent/credctl/config.json
+        print_ok "Installed credctl config"
+    else
+        print_warn "Skipped credctl config (already exists)"
+    fi
+
+    # Install launchd plist (always overwrite)
+    print_step "Installing launchd service"
+    cp "$SCRIPT_DIR/com.credagent.enclave.plist" /Library/LaunchDaemons/com.credagent.enclave.plist
+    chmod 644 /Library/LaunchDaemons/com.credagent.enclave.plist
+    print_ok "Installed com.credagent.enclave.plist"
+
+    # --- Start / restart service ---
+    print_step "Starting service"
+    if [ "$UPGRADE_MODE" = true ]; then
+        launchctl load /Library/LaunchDaemons/com.credagent.enclave.plist
+        sleep 2
+        if launchctl list 2>/dev/null | grep -q "com.credagent.enclave"; then
+            print_ok "credagent service restarted successfully"
+        else
+            print_fail "credagent service failed to start"
+            print_error "Check logs: tail -f /usr/local/var/log/credagent/credagent.log"
+        fi
+    else
+        if [ -f /usr/local/etc/credagent/engine/master.key ]; then
+            launchctl load /Library/LaunchDaemons/com.credagent.enclave.plist
+            sleep 2
+            if launchctl list 2>/dev/null | grep -q "com.credagent.enclave"; then
+                print_ok "credagent service started successfully"
+            else
+                print_fail "credagent service failed to start"
+                print_error "Check logs: tail -f /usr/local/var/log/credagent/credagent.log"
+            fi
+        else
+            print_warn "System not yet initialized (master key not found)"
+            print_warn "Service NOT started — please run init first"
+        fi
+    fi
+
+    # --- Summary ---
+    echo ""
+    echo -e "${BOLD}===============================${NC}"
+    if [ "$UPGRADE_MODE" = true ]; then
+        echo -e "${GREEN}${BOLD}  Upgrade completed successfully!${NC}"
+        echo -e "${BOLD}===============================${NC}"
+        if [ -n "$BACKUP_FILE" ]; then
+            echo ""
+            echo -e "  Backup saved to: ${BOLD}$BACKUP_FILE${NC}"
+            echo ""
+            echo "  Please verify the upgrade. If anything is wrong, rollback with:"
+            echo "    sudo ./INSTALL --rollback"
+        fi
+        echo ""
+        echo "Useful commands:"
+        echo "  sudo launchctl list | grep credagent"
+        echo "  tail -f /usr/local/var/log/credagent/credagent.log"
+    else
+        echo -e "${GREEN}${BOLD}  Installation completed successfully!${NC}"
+        echo -e "${BOLD}===============================${NC}"
+        if [ ! -f /usr/local/etc/credagent/engine/master.key ]; then
+            echo ""
+            echo "Next steps:"
+            echo "1. Edit config files if needed:"
+            echo "   - /usr/local/etc/credagent/engine/config.json"
+            echo "   - /usr/local/etc/credagent/credctl/config.json"
+            echo ""
+            echo "2. Initialize the system (REQUIRED before first start):"
+            echo "   sudo credagent init --config /usr/local/etc/credagent/engine/config.json"
+            echo ""
+            echo "3. The service will be started automatically after init."
+            echo "   Or start manually:"
+            echo "   sudo launchctl load /Library/LaunchDaemons/com.credagent.enclave.plist"
+            echo ""
+            echo "Cloud image / unattended alternative (no interactive init):"
+            echo "   Run 'credagent run --auto-init' to bootstrap a master key and an"
+            echo "   unrecoverable random admin password on first start. Reset the password"
+            echo "   later with: sudo credagent init --config /usr/local/etc/credagent/engine/config.json"
+        fi
+        echo ""
+        echo "Useful commands:"
+        echo "  sudo launchctl list | grep credagent"
+        echo "  tail -f /usr/local/var/log/credagent/credagent.log"
+    fi
+}
+
+# ============================================================
+# Dispatch by OS
+# ============================================================
+echo ""
+echo -e "  Platform: ${BOLD}$OS${NC}"
+
+case "$OS" in
+    Linux)
+        install_linux
+        ;;
+    Darwin)
+        install_darwin
+        ;;
+    *)
+        print_error "Unsupported operating system: $OS"
+        print_error "This script supports Linux and macOS only."
+        exit 1
+        ;;
+esac
+
+echo ""

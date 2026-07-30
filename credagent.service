@@ -1,0 +1,49 @@
+[Unit]
+Description=CredAgent Enclave Daemon (with integrated FUSE)
+After=network.target
+
+[Service]
+Type=simple
+User=root
+Group=root
+
+UMask=0022
+
+# 自动在 /run 下创建 /run/credagent，程序停止后自动删除
+RuntimeDirectory=credagent
+RuntimeDirectoryMode=0751
+
+# 自动在 /var/lib 下创建 /var/lib/credagent，持久化存储
+StateDirectory=credagent
+StateDirectoryMode=0751
+
+# --- 启动前的 FUSE 清理（处理死挂载残留） ---
+# credagent 程序自身也会在启动时清理残留挂载，此处作为额外安全网。
+# 使用 nsenter 确保在宿主 mount namespace 中执行（防止 systemd namespace 隔离）。
+ExecStartPre=+/usr/bin/nsenter --mount=/proc/1/ns/mnt /usr/bin/bash -c "mountpoint -q /mnt/credagent/shielded 2>/dev/null && /usr/bin/fusermount -uz /mnt/credagent/shielded 2>/dev/null || true"
+
+# --- 创建并授权 FUSE 挂载目录 ---
+ExecStartPre=+/usr/bin/mkdir -p /mnt/credagent/shielded/
+ExecStartPre=+/usr/bin/chown root:root /mnt/credagent/shielded/
+ExecStartPre=+/usr/bin/chmod 755 /mnt/credagent/shielded/
+
+# 在宿主 mount namespace 中运行，确保 FUSE 挂载对所有进程可见。
+# systemd 默认为服务创建独立的 mount namespace (unshare CLONE_NEWNS)，
+# 导致 FUSE 挂载仅在该 namespace 内可见。nsenter 将进程切回 PID 1 的 namespace。
+DeviceAllow=/dev/fuse rw
+
+ExecStart=/usr/bin/nsenter --mount=/proc/1/ns/mnt /usr/local/bin/credagent run --mount /mnt/credagent/shielded/ --socket-dir /run/credagent --baseline-file /var/lib/credagent/baseline.enc --config /usr/local/etc/credagent/engine/config.json
+Restart=on-failure
+RestartSec=5
+StartLimitIntervalSec=60
+StartLimitBurst=3
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=credagent
+
+# --- 服务停止时的 FUSE 清理 ---
+# 正常停止由程序 signal handler 处理卸载。此处处理异常退出（SIGKILL/崩溃）后的残留。
+ExecStopPost=+/usr/bin/nsenter --mount=/proc/1/ns/mnt /usr/bin/bash -c "mountpoint -q /mnt/credagent/shielded 2>/dev/null && /usr/bin/fusermount -uz /mnt/credagent/shielded 2>/dev/null || true"
+
+[Install]
+WantedBy=multi-user.target

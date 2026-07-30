@@ -1,0 +1,383 @@
+syntax = "proto3";
+
+package enclave;
+
+option go_package = "github.com/alibaba/CredAgent/api/gen/enclave";
+
+import "google/protobuf/empty.proto";
+import "google/protobuf/timestamp.proto";
+
+// File permissions structure
+message FilePerms {
+  uint32 uid = 1;  // User ID
+  uint32 gid = 2;  // Group ID
+  uint32 mode = 3; // File mode (permissions)
+}
+
+// Credential baseline structure
+message CredentialBaseline {
+  reserved 1;                            // Reserved: file_id (removed, unused)
+  string target_path = 2;                // Original target path of the file
+  bytes encrypted_data = 3;              // Encrypted (or plaintext) data
+  FilePerms permissions = 4;             // Original file permissions
+  repeated string allowed_binaries = 5;  // List of allowed binary paths
+  string verification_strategy = 6;      // Verification strategy (BASIC, ONE_TIME_USE, etc.)
+  google.protobuf.Timestamp ctime = 7;   // Creation timestamp
+  int64 size = 8;                        // Size of the original data
+  string sha = 9;                        // SHA256 identifier (first 12 chars)
+  repeated string allowed_binaries_sha256 = 10; // SHA256 hashes of allowed binaries
+  int64 max_open_count = 11;             // Maximum number of times the credential can be opened (0 means unlimited)
+  bool writable = 12;                    // Whether the EncryptedData can be modified (default false)
+  bool measure = 13;                     // Whether to verify SHA256 of allowed binaries at runtime
+}
+
+// Permit ticket structure
+message PermitTicket {
+  string uuid = 1;                           // Unique identifier for the ticket
+  string target_file_path = 2;               // Path of the target file
+  string status = 3;                         // Status of the ticket (PENDING, ACTIVE, BURNED)
+  string command_spec = 4;                   // Command specification for validation
+  int64 bound_pid = 5;                       // PID that the ticket is bound to (for PID_BIND strategy)
+  google.protobuf.Timestamp expires_at = 6;  // Expiration timestamp (optional)
+}
+
+// Access mode enumeration
+enum AccessMode {
+  READ_ONLY = 0;    // Read-only access
+  WRITE_ONLY = 1;   // Write-only access
+  READ_WRITE = 2;   // Read and write access
+}
+
+// Process context structure for access requests
+message ProcessContext {
+  string object_path = 1;      // Path of the object being accessed
+  int32 pid = 2;               // Process ID
+  int32 uid = 3;               // User ID
+  string exe_path = 4;         // Path to the executable
+  string cmdline = 5;          // Command line arguments
+  string permit_uuid = 6;      // Permit UUID for access (if applicable)
+  string exe_sha256 = 7;       // SHA256 hash of the executable
+  int64 current_open_count = 8; // Current number of times the file has been opened by this process
+  uint64 process_start_time = 9; // Process start time in seconds since epoch
+  AccessMode access_mode = 10; // Access mode (read, write, or read-write)
+  int32 gid = 11;              // Group ID of the process
+  bool truncate = 12;          // Whether O_TRUNC flag is set (file should be truncated to 0 on open)
+}
+
+// Access status enumeration
+enum AccessStatus {
+  ACCESS_GRANTED = 0;           // Access granted
+  ACCESS_BASELINE_DENIED = 1;   // Denied by baseline policy
+  ACCESS_PERMIT_DENIED = 2;     // Denied by permit validation
+  ACCESS_NO_PERMIT_TICKET = 3;  // No permit ticket provided or invalid
+}
+
+// Access response structure
+message AccessResponse {
+  AccessStatus status = 1;      // Access status
+  bytes plaintext_data = 2;     // Plaintext data (if granted) - deprecated in new design
+  string denial_reason = 3;     // Reason for denial (if denied)
+  int64 max_open_count = 4;     // Maximum number of times the credential can be opened (0 means unlimited)
+  string file_sha = 5;          // SHA identifier of the file for handle management
+  string handle_id = 6;         // Handle ID for accessing the file content later
+}
+
+// ReadHandleContent request structure
+message ReadHandleContentRequest {
+  string handle_id = 1;         // Handle ID to read content from
+  int64 offset = 2;             // Offset in the file to read from
+  int64 length = 3;             // Length of data to read
+}
+
+// ReadHandleContent response structure
+message ReadHandleContentResponse {
+  bytes content = 1;            // Content read from the handle
+  bool success = 2;             // Whether the read operation was successful
+  string error_message = 3;     // Error message if the operation failed
+}
+
+// WriteHandleContent request structure
+message WriteHandleContentRequest {
+  string handle_id = 1;         // Handle ID to write content to
+  int64 offset = 2;             // Offset in the file to write to
+  bytes content = 3;            // Content to write
+}
+
+// WriteHandleContent response structure
+message WriteHandleContentResponse {
+  int64 bytes_written = 1;      // Number of bytes written
+  bool success = 2;             // Whether the write operation was successful
+  string error_message = 3;     // Error message if the operation failed
+}
+
+// FlushHandleContent request structure
+message FlushHandleContentRequest {
+  string handle_id = 1;         // Handle ID to flush
+  string file_sha = 2;          // SHA identifier of the file for verification
+}
+
+// FlushHandleContent response structure
+message FlushHandleContentResponse {
+  bool success = 1;             // Whether the flush operation was successful
+  string error_message = 2;     // Error message if the operation failed
+  int64 new_size = 3;           // New size of the file after flush
+}
+
+// ReleaseHandle request structure
+message ReleaseHandleRequest {
+  string handle_id = 1;         // Handle ID to release
+  string file_sha = 2;          // SHA identifier of the file
+}
+
+// ReleaseHandle response structure
+message ReleaseHandleResponse {
+  bool success = 1;             // Whether the operation was successful
+  string message = 2;           // Human-readable message
+}
+
+// TruncateHandleContent request structure
+message TruncateHandleContentRequest {
+  string handle_id = 1;         // Handle ID to truncate
+  int64 new_size = 2;           // New size of the file content
+}
+
+// TruncateHandleContent response structure
+message TruncateHandleContentResponse {
+  bool success = 1;             // Whether the truncate operation was successful
+  string error_message = 2;     // Error message if the operation failed
+  int64 new_size = 3;           // New size after truncation
+}
+
+// Status response structure
+message StatusResponse {
+  bool success = 1;             // Whether the operation was successful
+  string message = 2;           // Human-readable message
+  string sha = 3;               // SHA identifier of the onboarded file (returned by OnboardFile)
+}
+
+// File existence response structure
+message FileExistenceResponse {
+  bool exists = 1;                          // Whether the file exists
+  bool is_protected = 2;                    // Whether the file is protected by the enclave
+  string sha = 3;                          // SHA256 identifier (if protected)
+  string target_path = 4;                  // Target path of the file (if exists)
+  FilePerms permissions = 5;               // Permissions of the file (if exists)
+  google.protobuf.Timestamp creation_time = 6; // Creation time of the file (if exists)
+  int64 size = 7;                          // Size of the file (if exists)
+  string denial_reason = 8;                // Reason for denial (if applicable)
+}
+
+// Request permission request structure
+message RequestPermissionRequest {
+  string intent = 1;            // User's intent for accessing the file
+  string cmdline = 2;           // Command line that will access the file
+  string target_file = 3;       // Target file to access
+}
+
+// Request permission response structure
+message RequestPermissionResponse {
+  bool success = 1;             // Whether the request was successful
+  string message = 2;           // Human-readable message
+  string uuid = 3;              // UUID of the created permit ticket (if successful)
+  string decision = 4;          // Decision (ALLOW or DENY)
+}
+
+// OnboardFile request structure
+message OnboardFileRequest {
+  string target_path = 1;                // Path of the file to onboard
+  bytes plaintext_data = 2;              // Plaintext data of the file
+  FilePerms permissions = 3;             // Original file permissions
+  repeated string allowed_binaries = 4;  // List of allowed binary paths
+  repeated string allowed_binaries_sha256 = 5; // SHA256 hashes of allowed binaries
+  string verification_strategy = 6;      // Verification strategy (BASIC, ONE_TIME_USE, etc.)
+  int64 max_open_count = 7;              // Maximum number of times the credential can be opened (0 means unlimited)
+  bool writable = 8;                     // Whether the file can be modified (default false)
+  bool measure = 9;                      // Whether to verify SHA256 measurement of allowed binaries
+}
+
+// ReleaseFile request structure
+message ReleaseFileRequest {
+  string file_id = 1;                    // SHA identifier of the file to release
+  int32 uid = 2;                         // User ID of the requesting user
+  string password = 3;                   // Password for authentication
+}
+
+// ReleaseFile response structure
+message ReleaseFileResponse {
+  bool success = 1;                      // Whether the operation was successful
+  string message = 2;                    // Human-readable message
+  string file_path = 3;                  // Path of the released file
+  bytes file_content = 4;                // Content of the released file
+  uint32 owner_uid = 5;                  // Owner UID of the released file
+  uint32 owner_gid = 6;                  // Owner GID of the released file
+  uint32 permission = 7;                 // Permission of the released file
+  string file_id = 8;                    // File ID (SHA identifier) for baseline removal
+}
+
+// RemoveFile request structure
+message RemoveFileRequest {
+  string sha = 1;                        // SHA identifier of the file to remove
+  string password = 2;                   // Password for authentication
+}
+
+// GetProtectedFileInfo request structure
+message GetProtectedFileInfoRequest {
+  string sha = 1;                        // SHA identifier (baseline ID / hashIndex) of the file to get
+}
+
+// GetProtectedFileInfo response structure
+message GetProtectedFileInfoResponse {
+  bool success = 1;                      // Whether the operation was successful
+  string message = 2;                    // Human-readable message
+  CredentialBaseline baseline = 3;       // The requested baseline information (excluding sensitive data)
+}
+
+// ListProtectedFiles response structure
+message ListProtectedFilesResponse {
+  bool success = 1;                      // Whether the operation was successful
+  string message = 2;                    // Human-readable message
+  repeated CredentialBaseline baselines = 3; // List of all protected files
+}
+
+// UpdateFileAccessRule request structure
+message UpdateFileAccessRule {
+  string sha = 1;                               // SHA identifier of the file to update
+  string password = 2;                          // Password for authentication
+  string strategy = 3;                          // New verification strategy (empty = no change)
+  repeated string allowed_binaries = 4;         // New allowed binary paths
+  repeated string allowed_binaries_sha256 = 5;  // SHA256 hashes of allowed binaries (one per binary)
+  bool update_allowed_binaries = 6;             // Sentinel: whether to update allowed_binaries / sha256
+  int64 max_open_count = 7;                     // New maximum open count
+  bool update_max_open_count = 8;               // Sentinel: whether to update max_open_count
+  bool writable = 9;                            // New writable value
+  bool update_writable = 10;                    // Sentinel: whether to update writable
+  bool measure = 11;                            // New measure value
+  bool update_measure = 12;                     // Sentinel: whether to update measure
+}
+
+// UpdateFileInfo response structure
+message UpdateFileInfoResponse {
+  bool success = 1;                      // Whether the operation was successful
+  string message = 2;                    // Human-readable message
+  CredentialBaseline updated_baseline = 3; // The updated baseline information
+}
+
+// AttachPrograms request structure
+message AttachProgramsRequest {
+  string sha = 1;                               // SHA identifier of the file to update
+  string password = 2;                          // Password for authentication
+  repeated string allowed_binaries = 3;         // Programs to attach (must not already exist)
+  repeated string allowed_binaries_sha256 = 4;  // SHA256 of programs to attach (one per binary)
+}
+
+// AttachPrograms response structure
+message AttachProgramsResponse {
+  bool success = 1;                             // Whether the operation was successful
+  string message = 2;                           // Human-readable message
+  repeated string added = 3;                    // Programs successfully added
+  repeated string skipped = 4;                  // Programs already existed, skipped
+  CredentialBaseline updated_baseline = 5;      // The updated baseline
+}
+
+// DetachPrograms request structure
+message DetachProgramsRequest {
+  string sha = 1;                               // SHA identifier of the file to update
+  string password = 2;                          // Password for authentication
+  repeated string allowed_binaries = 3;         // Programs to detach (remove from allowed list)
+}
+
+// DetachPrograms response structure
+message DetachProgramsResponse {
+  bool success = 1;                             // Whether the operation was successful
+  string message = 2;                           // Human-readable message
+  repeated string removed = 3;                  // Programs successfully removed
+  repeated string not_found = 4;                // Programs not found in the allowed list
+  CredentialBaseline updated_baseline = 5;      // The updated baseline
+}
+
+// RefreshPrograms request structure
+message RefreshProgramsRequest {
+  string sha = 1;                               // SHA identifier of the file to update
+  string password = 2;                          // Password for authentication
+  repeated string allowed_binaries = 3;         // Programs whose SHA256 should be refreshed
+  repeated string allowed_binaries_sha256 = 4;  // New SHA256 values (one per binary, same order)
+}
+
+// RefreshPrograms response structure
+message RefreshProgramsResponse {
+  bool success = 1;                             // Whether the operation was successful
+  string message = 2;                           // Human-readable message
+  repeated string refreshed = 3;                // Programs whose SHA256 was updated
+  repeated string not_authorized = 4;           // Programs not in AllowedPrograms (not authorized)
+  CredentialBaseline updated_baseline = 5;      // The updated baseline
+}
+
+// DumpFileContent request structure
+message DumpFileContentRequest {
+  string sha = 1;                        // SHA identifier of the file to dump
+  string password = 2;                   // Password for authentication
+}
+
+// DumpFileContent response structure
+message DumpFileContentResponse {
+  bool success = 1;                      // Whether the operation was successful
+  string message = 2;                    // Human-readable message
+  bytes content = 3;                     // Plaintext file content
+  string target_path = 4;               // Original target path of the file
+}
+
+// RestoreFileContent request structure
+message RestoreFileContentRequest {
+  string sha = 1;                        // SHA identifier of the file to restore
+  string password = 2;                   // Password for authentication
+  bytes content = 3;                     // New plaintext content to store
+}
+
+// RestoreFileContent response structure
+message RestoreFileContentResponse {
+  bool success = 1;                      // Whether the operation was successful
+  string message = 2;                    // Human-readable message
+  int64 new_size = 3;                    // New size of the stored content
+}
+
+// EnclaveGuardService defines the gRPC service for the enclave daemon
+service EnclaveGuardService {
+  // OnboardFile stores a credential file in the enclave
+  rpc OnboardFile(OnboardFileRequest) returns (StatusResponse);
+
+  // ReleaseFile releases a credential file from the enclave
+  rpc ReleaseFile(ReleaseFileRequest) returns (ReleaseFileResponse);
+
+  // RemoveFile removes a protected file from the enclave
+  rpc RemoveFile(RemoveFileRequest) returns (StatusResponse);
+
+  // ListProtectedFiles lists all protected files in the enclave
+  rpc ListProtectedFiles(google.protobuf.Empty) returns (ListProtectedFilesResponse);
+
+  // AddPermitTicket adds a permit ticket to the ledger
+  rpc AddPermitTicket(PermitTicket) returns (StatusResponse);
+
+   // RequestPermission handles requests for permission to access a credential file
+  rpc RequestPermission(RequestPermissionRequest) returns (RequestPermissionResponse);
+
+  // UpdateFileInfo updates the security configuration of an existing protected file
+  rpc UpdateFileInfo(UpdateFileAccessRule) returns (UpdateFileInfoResponse);
+
+  // GetProtectedFileInfo retrieves information about a specific protected file
+  rpc GetProtectedFileInfo(GetProtectedFileInfoRequest) returns (GetProtectedFileInfoResponse);
+
+  // AttachPrograms adds new allowed binary programs to an existing protected file
+  rpc AttachPrograms(AttachProgramsRequest) returns (AttachProgramsResponse);
+
+  // DetachPrograms removes allowed binary programs from an existing protected file
+  rpc DetachPrograms(DetachProgramsRequest) returns (DetachProgramsResponse);
+
+  // RefreshPrograms updates SHA256 values for already-authorized programs in an existing protected file
+  rpc RefreshPrograms(RefreshProgramsRequest) returns (RefreshProgramsResponse);
+
+  // DumpFileContent retrieves the plaintext content of a protected file without modifying the baseline
+  rpc DumpFileContent(DumpFileContentRequest) returns (DumpFileContentResponse);
+
+  // RestoreFileContent replaces the content of a protected file with new data
+  rpc RestoreFileContent(RestoreFileContentRequest) returns (RestoreFileContentResponse);
+}
