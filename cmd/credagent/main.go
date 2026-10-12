@@ -417,7 +417,7 @@ func main() {
 			if err := syscall.Setrlimit(syscall.RLIMIT_CORE, &syscall.Rlimit{Cur: 0, Max: 0}); err != nil {
 				logger.Warn("Failed to disable core dumps: %v", err)
 			}
-			if err := unix.Prctl(unix.PR_SET_DUMPABLE, 0, 0, 0, 0); err != nil {
+			if err := setNonDumpable(); err != nil {
 				logger.Warn("Failed to set PR_SET_DUMPABLE=0: %v", err)
 			}
 
