@@ -8,7 +8,7 @@ import (
 	"os"
 	"unsafe"
 
-	"github.com/alibaba/CredAgent/pkg/logger"
+	"github.com/aliyun/credagent/pkg/logger"
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/link"
 )

@@ -7,7 +7,7 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/alibaba/CredAgent/pkg/logger"
+	"github.com/aliyun/credagent/pkg/logger"
 )
 
 // BinaryInf defines the interface for an executable file.

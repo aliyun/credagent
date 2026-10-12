@@ -7,7 +7,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/alibaba/CredAgent/pkg/logger"
+	"github.com/aliyun/credagent/pkg/logger"
 )
 
 // BaselineStore defines the interface for the credential baseline store.

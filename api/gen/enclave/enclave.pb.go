@@ -3101,7 +3101,7 @@ const file_enclave_proto_rawDesc = "" +
 	"\x0eDetachPrograms\x12\x1e.enclave.DetachProgramsRequest\x1a\x1f.enclave.DetachProgramsResponse\x12T\n" +
 	"\x0fRefreshPrograms\x12\x1f.enclave.RefreshProgramsRequest\x1a .enclave.RefreshProgramsResponse\x12T\n" +
 	"\x0fDumpFileContent\x12\x1f.enclave.DumpFileContentRequest\x1a .enclave.DumpFileContentResponse\x12]\n" +
-	"\x12RestoreFileContent\x12\".enclave.RestoreFileContentRequest\x1a#.enclave.RestoreFileContentResponseB.Z,github.com/alibaba/CredAgent/api/gen/enclaveb\x06proto3"
+	"\x12RestoreFileContent\x12\".enclave.RestoreFileContentRequest\x1a#.enclave.RestoreFileContentResponseB-Z+github.com/aliyun/credagent/api/gen/enclaveb\x06proto3"
 
 var (
 	file_enclave_proto_rawDescOnce sync.Once

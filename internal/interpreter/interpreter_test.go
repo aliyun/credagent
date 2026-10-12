@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/alibaba/CredAgent/internal/osutil"
+	"github.com/aliyun/credagent/internal/osutil"
 )
 
 func TestMain(m *testing.M) {

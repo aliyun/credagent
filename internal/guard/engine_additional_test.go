@@ -4,10 +4,10 @@ import (
 	"context"
 	"testing"
 
-	enclave "github.com/alibaba/CredAgent/api/gen/enclave"
-	"github.com/alibaba/CredAgent/internal/agent"
-	"github.com/alibaba/CredAgent/internal/baseline"
-	"github.com/alibaba/CredAgent/internal/ledger"
+	enclave "github.com/aliyun/credagent/api/gen/enclave"
+	"github.com/aliyun/credagent/internal/agent"
+	"github.com/aliyun/credagent/internal/baseline"
+	"github.com/aliyun/credagent/internal/ledger"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"

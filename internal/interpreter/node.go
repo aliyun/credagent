@@ -3,8 +3,8 @@ package interpreter
 import (
 	"strings"
 
-	"github.com/alibaba/CredAgent/internal/osutil"
-	"github.com/alibaba/CredAgent/pkg/logger"
+	"github.com/aliyun/credagent/internal/osutil"
+	"github.com/aliyun/credagent/pkg/logger"
 )
 
 // Node adds Node.js-specific env-var checks: NODE_OPTIONS (can inject require'd

@@ -15,8 +15,8 @@ import (
 	"path/filepath"
 	"sync"
 
-	"github.com/alibaba/CredAgent/api/gen/enclave"
-	"github.com/alibaba/CredAgent/pkg/crypto"
+	"github.com/aliyun/credagent/api/gen/enclave"
+	"github.com/aliyun/credagent/pkg/crypto"
 	"google.golang.org/protobuf/proto"
 )
 

@@ -3,8 +3,8 @@ package interpreter
 import (
 	"strings"
 
-	"github.com/alibaba/CredAgent/internal/osutil"
-	"github.com/alibaba/CredAgent/pkg/logger"
+	"github.com/aliyun/credagent/internal/osutil"
+	"github.com/aliyun/credagent/pkg/logger"
 )
 
 // Ruby adds Ruby-specific env-var checks: RUBYOPT (extra -r requires),

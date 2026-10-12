@@ -9,12 +9,12 @@ import (
 	"syscall"
 	"testing"
 
-	enclave "github.com/alibaba/CredAgent/api/gen/enclave"
-	"github.com/alibaba/CredAgent/internal/agent"
-	"github.com/alibaba/CredAgent/internal/baseline"
-	"github.com/alibaba/CredAgent/internal/ledger"
-	"github.com/alibaba/CredAgent/internal/osutil"
-	"github.com/alibaba/CredAgent/pkg/logger"
+	enclave "github.com/aliyun/credagent/api/gen/enclave"
+	"github.com/aliyun/credagent/internal/agent"
+	"github.com/aliyun/credagent/internal/baseline"
+	"github.com/aliyun/credagent/internal/ledger"
+	"github.com/aliyun/credagent/internal/osutil"
+	"github.com/aliyun/credagent/pkg/logger"
 	"github.com/stretchr/testify/assert"
 )
 

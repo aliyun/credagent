@@ -8,10 +8,10 @@ import (
 	"sync"
 	"syscall"
 
-	enclave "github.com/alibaba/CredAgent/api/gen/enclave"
-	"github.com/alibaba/CredAgent/internal/baseline"
-	"github.com/alibaba/CredAgent/internal/guard"
-	"github.com/alibaba/CredAgent/pkg/logger"
+	enclave "github.com/aliyun/credagent/api/gen/enclave"
+	"github.com/aliyun/credagent/internal/baseline"
+	"github.com/aliyun/credagent/internal/guard"
+	"github.com/aliyun/credagent/pkg/logger"
 
 	"github.com/hanwen/go-fuse/v2/fs"
 	"github.com/hanwen/go-fuse/v2/fuse"

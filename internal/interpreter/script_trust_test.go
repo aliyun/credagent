@@ -3,7 +3,7 @@ package interpreter
 import (
 	"testing"
 
-	"github.com/alibaba/CredAgent/internal/osutil"
+	"github.com/aliyun/credagent/internal/osutil"
 )
 
 func TestPython_ExtractScriptPath(t *testing.T) {

@@ -4,9 +4,9 @@ import (
 	"context"
 	"testing"
 
-	"github.com/alibaba/CredAgent/api/gen/enclave"
-	"github.com/alibaba/CredAgent/internal/baseline"
-	"github.com/alibaba/CredAgent/internal/ledger"
+	"github.com/aliyun/credagent/api/gen/enclave"
+	"github.com/aliyun/credagent/internal/baseline"
+	"github.com/aliyun/credagent/internal/ledger"
 	"github.com/stretchr/testify/assert"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"

@@ -1,7 +1,7 @@
 package guard
 
 import (
-	"github.com/alibaba/CredAgent/internal/agent"
+	"github.com/aliyun/credagent/internal/agent"
 )
 
 // MockCredAgentClient implements the CredAgentClientInterface for testing

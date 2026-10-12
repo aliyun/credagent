@@ -7,8 +7,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/alibaba/CredAgent/api/gen/enclave"
-	"github.com/alibaba/CredAgent/pkg/logger"
+	"github.com/aliyun/credagent/api/gen/enclave"
+	"github.com/aliyun/credagent/pkg/logger"
 	"google.golang.org/protobuf/proto"
 )
 

@@ -8,10 +8,10 @@ import (
 	"path/filepath"
 	"testing"
 
-	enclave "github.com/alibaba/CredAgent/api/gen/enclave"
-	"github.com/alibaba/CredAgent/internal/baseline"
-	"github.com/alibaba/CredAgent/internal/guard"
-	"github.com/alibaba/CredAgent/internal/osutil"
+	enclave "github.com/aliyun/credagent/api/gen/enclave"
+	"github.com/aliyun/credagent/internal/baseline"
+	"github.com/aliyun/credagent/internal/guard"
+	"github.com/aliyun/credagent/internal/osutil"
 	"google.golang.org/protobuf/types/known/emptypb"
 )
 

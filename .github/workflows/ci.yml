@@ -1,0 +1,63 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  linux:
+    name: Linux · build / vet / test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Build (static, CGO disabled)
+        run: |
+          for c in credagent credctl credreq; do
+            CGO_ENABLED=0 go build -trimpath -o "dist/$c" "./cmd/$c"
+          done
+          file dist/credagent
+
+      - name: Vet
+        run: go vet ./...
+
+      # Tests matching *RealAI require a live LLM endpoint supplied via
+      # internal/agent/config.test.json, which is not committed. Everything
+      # else is deterministic and runs offline.
+      - name: Test
+        run: go test ./... -count=1 -skip 'RealAI'
+
+  darwin:
+    name: macOS · build
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      # The process-attestation layer (internal/osutil/process_impl_darwin.go)
+      # uses cgo against libproc/sysctl, so macOS cannot be cross-compiled
+      # from Linux. This job exists to catch darwin-only breakage early.
+      - name: Build
+        run: |
+          for c in credagent credctl credreq; do
+            go build -trimpath -o "dist/$c" "./cmd/$c"
+          done
+          file dist/credagent

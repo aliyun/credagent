@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/alibaba/CredAgent/api/gen/enclave"
-	"github.com/alibaba/CredAgent/internal/config"
+	"github.com/aliyun/credagent/api/gen/enclave"
+	"github.com/aliyun/credagent/internal/config"
 	"github.com/spf13/cobra"
 )
 

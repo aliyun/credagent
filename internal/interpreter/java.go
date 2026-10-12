@@ -3,8 +3,8 @@ package interpreter
 import (
 	"strings"
 
-	"github.com/alibaba/CredAgent/internal/osutil"
-	"github.com/alibaba/CredAgent/pkg/logger"
+	"github.com/aliyun/credagent/internal/osutil"
+	"github.com/aliyun/credagent/pkg/logger"
 )
 
 // Java adds JVM-specific env-var checks: JAVA_TOOL_OPTIONS and _JAVA_OPTIONS

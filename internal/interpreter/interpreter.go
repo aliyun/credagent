@@ -28,8 +28,8 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/alibaba/CredAgent/internal/osutil"
-	"github.com/alibaba/CredAgent/pkg/logger"
+	"github.com/aliyun/credagent/internal/osutil"
+	"github.com/aliyun/credagent/pkg/logger"
 )
 
 // ScriptExtractor extracts the main script path from command-line arguments.

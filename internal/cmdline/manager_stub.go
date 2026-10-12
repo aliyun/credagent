@@ -2,7 +2,7 @@
 
 package cmdline
 
-import "github.com/alibaba/CredAgent/pkg/logger"
+import "github.com/aliyun/credagent/pkg/logger"
 
 // NewManager on non-Linux platforms always returns an empty Manager
 // since eBPF and auditd are Linux-specific.

@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/alibaba/CredAgent/api/gen/enclave"
+	"github.com/aliyun/credagent/api/gen/enclave"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 )

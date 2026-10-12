@@ -1,0 +1,14 @@
+# GitHub language detection
+#
+# vmlinux.h is a kernel-generated header (3.3 MB) vendored solely so the eBPF
+# program can be compiled without a full kernel source tree. Left unmarked it
+# outweighs all hand-written Go by ~4x and GitHub classifies the repository as
+# "C", hiding it from Go language filters and rankings.
+internal/execsnoop/bpf/vmlinux.h linguist-vendored
+
+# Emitted by bpf2go via `go generate ./internal/execsnoop/`.
+internal/execsnoop/execsnoop_x86_bpfel.go linguist-generated
+internal/execsnoop/execsnoop_x86_bpfel.o linguist-generated -diff
+
+# Emitted by protoc-gen-go / protoc-gen-go-grpc from api/proto/enclave.proto.
+api/gen/** linguist-generated

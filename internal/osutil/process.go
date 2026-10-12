@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/alibaba/CredAgent/pkg/logger"
+	"github.com/aliyun/credagent/pkg/logger"
 )
 
 // ProcessInf defines the core interface for process identity and risk assessment.

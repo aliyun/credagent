@@ -3,8 +3,8 @@ package interpreter
 import (
 	"strings"
 
-	"github.com/alibaba/CredAgent/internal/osutil"
-	"github.com/alibaba/CredAgent/pkg/logger"
+	"github.com/aliyun/credagent/internal/osutil"
+	"github.com/aliyun/credagent/pkg/logger"
 )
 
 // Perl adds Perl-specific env-var checks: PERL5OPT (extra perl options),

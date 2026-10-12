@@ -10,9 +10,9 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/alibaba/CredAgent/api/gen/enclave"
-	"github.com/alibaba/CredAgent/pkg/crypto"
-	"github.com/alibaba/CredAgent/pkg/logger"
+	"github.com/aliyun/credagent/api/gen/enclave"
+	"github.com/aliyun/credagent/pkg/crypto"
+	"github.com/aliyun/credagent/pkg/logger"
 	bolt "go.etcd.io/bbolt"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"

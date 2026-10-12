@@ -12,8 +12,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/alibaba/CredAgent/pkg/crypto"
-	"github.com/alibaba/CredAgent/pkg/logger"
+	"github.com/aliyun/credagent/pkg/crypto"
+	"github.com/aliyun/credagent/pkg/logger"
 	"golang.org/x/crypto/argon2"
 )
 

@@ -5,9 +5,9 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/alibaba/CredAgent/internal/agent"
-	"github.com/alibaba/CredAgent/internal/config"
-	"github.com/alibaba/CredAgent/pkg/version"
+	"github.com/aliyun/credagent/internal/agent"
+	"github.com/aliyun/credagent/internal/config"
+	"github.com/aliyun/credagent/pkg/version"
 	"github.com/spf13/cobra"
 )
 

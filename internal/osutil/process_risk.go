@@ -1,6 +1,6 @@
 package osutil
 
-import "github.com/alibaba/CredAgent/pkg/logger"
+import "github.com/aliyun/credagent/pkg/logger"
 
 // CheckRisk performs a full risk assessment of the process:
 //  0. FreeCheck fast path — harness descendant, skip everything

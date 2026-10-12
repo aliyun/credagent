@@ -3,7 +3,7 @@ package main
 import (
 	"fmt"
 
-	"github.com/alibaba/CredAgent/pkg/version"
+	"github.com/aliyun/credagent/pkg/version"
 	"github.com/spf13/cobra"
 )
 

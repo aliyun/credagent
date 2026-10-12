@@ -5,7 +5,7 @@ package cmdline
 import (
 	"fmt"
 
-	"github.com/alibaba/CredAgent/internal/execsnoop"
+	"github.com/aliyun/credagent/internal/execsnoop"
 )
 
 type ebpfSource struct {

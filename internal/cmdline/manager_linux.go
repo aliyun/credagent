@@ -2,7 +2,7 @@
 
 package cmdline
 
-import "github.com/alibaba/CredAgent/pkg/logger"
+import "github.com/aliyun/credagent/pkg/logger"
 
 // NewManager creates a Manager based on the cmdline_trusted_source config value.
 // It tries each configured source in order; sources that fail to initialize are skipped.

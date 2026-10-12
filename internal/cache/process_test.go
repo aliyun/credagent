@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/alibaba/CredAgent/internal/osutil"
+	"github.com/aliyun/credagent/internal/osutil"
 )
 
 func mockFactory(registry map[int32]osutil.ProcessInf) func(pid int32) osutil.ProcessInf {

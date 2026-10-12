@@ -3,9 +3,9 @@ package guard
 import (
 	"testing"
 
-	"github.com/alibaba/CredAgent/internal/agent"
-	"github.com/alibaba/CredAgent/internal/baseline"
-	"github.com/alibaba/CredAgent/internal/ledger"
+	"github.com/aliyun/credagent/internal/agent"
+	"github.com/aliyun/credagent/internal/baseline"
+	"github.com/aliyun/credagent/internal/ledger"
 )
 
 func TestIsCommandSpecMatching(t *testing.T) {

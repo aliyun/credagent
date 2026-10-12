@@ -1,6 +1,6 @@
 package cmdline
 
-import "github.com/alibaba/CredAgent/internal/osutil"
+import "github.com/aliyun/credagent/internal/osutil"
 
 // TrustedSource provides pid → original cmdline lookup captured at execve time.
 type TrustedSource interface {

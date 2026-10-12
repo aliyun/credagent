@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/alibaba/CredAgent/api/gen/enclave"
+	"github.com/aliyun/credagent/api/gen/enclave"
 )
 
 // generateRandomMasterKey creates a random 32-byte master key for testing

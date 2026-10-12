@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package enclave;
 
-option go_package = "github.com/alibaba/CredAgent/api/gen/enclave";
+option go_package = "github.com/aliyun/credagent/api/gen/enclave";
 
 import "google/protobuf/empty.proto";
 import "google/protobuf/timestamp.proto";

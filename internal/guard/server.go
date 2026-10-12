@@ -3,7 +3,7 @@ package guard
 import (
 	"context"
 
-	enclave "github.com/alibaba/CredAgent/api/gen/enclave"
+	enclave "github.com/aliyun/credagent/api/gen/enclave"
 	"google.golang.org/protobuf/types/known/emptypb"
 )
 

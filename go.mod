@@ -1,4 +1,4 @@
-module github.com/alibaba/CredAgent
+module github.com/aliyun/credagent
 
 go 1.25.7
 

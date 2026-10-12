@@ -13,8 +13,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/alibaba/CredAgent/internal/uds"
-	"github.com/alibaba/CredAgent/pkg/logger"
+	"github.com/aliyun/credagent/internal/uds"
+	"github.com/aliyun/credagent/pkg/logger"
 )
 
 // AuditRequest represents the request sent from Main AI Agent to CredAgent

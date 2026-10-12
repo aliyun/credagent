@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/alibaba/CredAgent/api/gen/enclave"
+	"github.com/aliyun/credagent/api/gen/enclave"
 )
 
 // ─── test helpers ─────────────────────────────────────────────────────────────
