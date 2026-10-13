@@ -27,7 +27,7 @@ jobs:
 
       - name: Build (static, CGO disabled)
         run: |
-          for c in credagent credctl credreq; do
+          for c in credagent credctl; do
             CGO_ENABLED=0 go build -trimpath -o "dist/$c" "./cmd/$c"
           done
           file dist/credagent
@@ -57,7 +57,7 @@ jobs:
       # from Linux. This job exists to catch darwin-only breakage early.
       - name: Build
         run: |
-          for c in credagent credctl credreq; do
+          for c in credagent credctl; do
             go build -trimpath -o "dist/$c" "./cmd/$c"
           done
           file dist/credagent

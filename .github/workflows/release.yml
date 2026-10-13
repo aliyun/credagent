@@ -13,7 +13,7 @@ permissions:
   contents: write
 
 env:
-  # Files copied into every release tarball alongside the three binaries.
+  # Files copied into every release tarball alongside the two binaries.
   PKG_FILES: >-
     INSTALL
     UNINSTALL
@@ -67,7 +67,7 @@ jobs:
       - name: Build static binaries
         run: |
           mkdir -p stage/bin
-          for c in credagent credctl credreq; do
+          for c in credagent credctl; do
             CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
               go build -trimpath -ldflags="-s -w" -o "stage/bin/$c" "./cmd/$c"
           done
@@ -78,13 +78,13 @@ jobs:
           VER="${{ needs.version-guard.outputs.version }}"
           DIR="credagent_${VER}_linux_amd64"
           mkdir -p "$DIR"
-          cp stage/bin/credagent stage/bin/credctl stage/bin/credreq "$DIR/"
+          cp stage/bin/credagent stage/bin/credctl "$DIR/"
           for f in $PKG_FILES; do
             [ -e "$f" ] || { echo "::error::missing package file: $f"; exit 1; }
             cp "$f" "$DIR/"
           done
           cp -R config.template "$DIR/"
-          chmod 0755 "$DIR/credagent" "$DIR/credctl" "$DIR/credreq" "$DIR/INSTALL" "$DIR/UNINSTALL"
+          chmod 0755 "$DIR/credagent" "$DIR/credctl" "$DIR/INSTALL" "$DIR/UNINSTALL"
           tar czf "${DIR}.tar.gz" "$DIR"
 
       - uses: actions/upload-artifact@v4
@@ -109,7 +109,7 @@ jobs:
       - name: Build universal binaries
         run: |
           mkdir -p stage/amd64 stage/arm64 stage/universal
-          for c in credagent credctl credreq; do
+          for c in credagent credctl; do
             CGO_ENABLED=1 GOOS=darwin GOARCH=amd64 \
               go build -trimpath -ldflags="-s -w" -o "stage/amd64/$c" "./cmd/$c"
             CGO_ENABLED=1 GOOS=darwin GOARCH=arm64 \
@@ -123,13 +123,13 @@ jobs:
           VER="${{ needs.version-guard.outputs.version }}"
           DIR="credagent_${VER}_darwin_universal"
           mkdir -p "$DIR"
-          cp stage/universal/credagent stage/universal/credctl stage/universal/credreq "$DIR/"
+          cp stage/universal/credagent stage/universal/credctl "$DIR/"
           for f in $PKG_FILES; do
             [ -e "$f" ] || { echo "::error::missing package file: $f"; exit 1; }
             cp "$f" "$DIR/"
           done
           cp -R config.template "$DIR/"
-          chmod 0755 "$DIR/credagent" "$DIR/credctl" "$DIR/credreq" "$DIR/INSTALL" "$DIR/UNINSTALL"
+          chmod 0755 "$DIR/credagent" "$DIR/credctl" "$DIR/INSTALL" "$DIR/UNINSTALL"
           tar czf "${DIR}.tar.gz" "$DIR"
 
       - uses: actions/upload-artifact@v4
