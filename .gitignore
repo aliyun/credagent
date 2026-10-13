@@ -12,7 +12,13 @@
 # skill files (deprecated)
 cmd/credreq/skill*.md
 
-# Docs/ — only manual.md is tracked
+# Docs/ — only manual.md and manual_zh.md are tracked on master
 /Docs/*
 !/Docs/manual.md
-PROJECT_SUMMARY.md
+!/Docs/manual_zh.md
+
+# Release artifacts — never commit binaries. The .aoneci pipeline builds
+# linux in CI and fetches darwin from GitHub Releases instead of reading
+# committed tarballs.
+/release/
+*.tar.gz

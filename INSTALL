@@ -108,7 +108,6 @@ get_backup_files_linux() {
     local files=(
         /usr/local/bin/credagent
         /usr/local/bin/credctl
-        /usr/local/bin/credreq
         /usr/local/etc/credagent/engine/config.json
         /usr/local/etc/credagent/engine/security.json
         /usr/local/etc/credagent/engine/master.key
@@ -128,7 +127,6 @@ get_backup_files_darwin() {
     local files=(
         /usr/local/bin/credagent
         /usr/local/bin/credctl
-        /usr/local/bin/credreq
         /usr/local/etc/credagent/engine/config.json
         /usr/local/etc/credagent/engine/security.json
         /usr/local/etc/credagent/engine/master.key
@@ -331,7 +329,7 @@ fi
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 OS="$(uname -s)"
-BINARIES=("credagent" "credctl" "credreq")
+BINARIES=("credagent" "credctl")
 UPGRADE_MODE=false
 
 # ============================================================
@@ -354,7 +352,6 @@ if [ "$ALL_FOUND" != true ]; then
     print_error "Missing binaries. Please build first:"
     echo "  go build -o credagent ./cmd/credagent"
     echo "  go build -o credctl ./cmd/credctl"
-    echo "  go build -o credreq ./cmd/credreq"
     exit 1
 fi
 
